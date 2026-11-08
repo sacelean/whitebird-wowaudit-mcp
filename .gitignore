@@ -3,3 +3,5 @@ node_modules/
 .env.*
 !.env.example
 *.tgz
+*oauth*.json
+*oauth*.json.*.tmp

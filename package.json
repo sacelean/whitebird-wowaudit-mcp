@@ -2,8 +2,16 @@
   "name": "@whitebird/wowaudit-mcp",
   "version": "0.1.0",
   "type": "module",
-  "engines": {"node": ">=20"},
+  "engines": {
+    "node": ">=20"
+  },
   "exports": "./src/index.js",
-  "scripts": {"test": "node --test", "tools": "node src/cli.js"},
-  "dependencies": {"@modelcontextprotocol/client": "^2.4.0"}
+  "scripts": {
+    "test": "node --test",
+    "tools": "node src/cli.js",
+    "login": "node src/login.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.4.0"
+  }
 }

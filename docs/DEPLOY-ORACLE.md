@@ -16,7 +16,31 @@ Comprobar como usuario de despliegue, sin mostrar los secretos:
 test -f "$HOME/whitebird/shared/agent.env" && test -r "$HOME/whitebird/shared/agent.env"
 ```
 
-El archivo debe contener `WOWAUDIT_MCP_URL`, `WOWAUDIT_MCP_TOKEN` y `WOWAUDIT_TEAM_ID=66082`, usando `.env.example` como referencia. Las demás variables del agente también se cargan en el proceso Node. Usar el endpoint y un token aceptados oficialmente por WoWAudit. OAuth todavía no está implementado.
+El archivo debe contener `WOWAUDIT_MCP_URL` y `WOWAUDIT_TEAM_ID=66082`, usando `.env.example` como referencia. `WOWAUDIT_MCP_TOKEN` ya no se utiliza; si el agente lo necesita para otra integración puede conservarlo. Las demás variables del agente también se cargan en el proceso Node.
+
+Los tokens OAuth y el registro del cliente se guardan aparte en `~/whitebird/shared/wowaudit-oauth.json`, con permisos 0600. No duplicar esos tokens en `agent.env` ni en secrets de GitHub. `WOWAUDIT_OAUTH_STORE` permite elegir otra ruta absoluta; no usar `~` literal en el `.env`. El archivo es texto plano y debe protegerse junto con los backups. No ejecutar simultáneamente varios procesos que renueven la misma sesión.
+
+## Login OAuth inicial
+
+Antes del primer despliegue hay que autorizar el cliente desde la VM. Como todavía no existe una versión activa, copiar o clonar este repositorio en una carpeta de preparación del usuario de despliegue y ejecutar allí `npm ci --ignore-scripts --no-audit --no-fund`.
+
+Desde tu ordenador, abrir una sesión SSH con túnel hacia el callback local de la VM:
+
+```bash
+ssh -L 8787:127.0.0.1:8787 USUARIO@HOST
+```
+
+En esa sesión, desde la carpeta de preparación (o `~/whitebird-wowaudit-mcp/current` para renovar una autorización):
+
+```bash
+node --env-file="$HOME/whitebird/shared/agent.env" src/login.js
+```
+
+Abrir en el navegador de tu ordenador la URL que muestra el comando y autorizar en WoWAudit. El callback escucha solo en `127.0.0.1:8787` y llega a la VM por el túnel; no abrir ese puerto en Oracle. El login expira a los cinco minutos. Se comprueba `state`, se usa PKCE y el SDK verifica el issuer antes de intercambiar el código. No compartir la URL de autorización ni el callback.
+
+El SDK descubre el servidor OAuth y registra el cliente dinámicamente si WoWAudit lo permite. Si exige un cliente previamente registrado, configurar en `agent.env` `WOWAUDIT_OAUTH_CLIENT_ID`, `WOWAUDIT_OAUTH_ISSUER` y, solo si corresponde al registro, `WOWAUDIT_OAUTH_CLIENT_SECRET`. Registrar exactamente `http://127.0.0.1:8787/callback` como redirect. No se ha podido consultar la página oficial de configuración: endpoint, scopes y política de registro deben verificarse con WoWAudit; no se presupone soporte de client credentials.
+
+Después del login, ejecutar el despliegue manual. Las conexiones normales usan la sesión persistida y el SDK renueva tokens ante un rechazo de autenticación. Si falta el refresh token o se revoca la sesión, repetir el login; GitHub Actions falla sin intentar un login interactivo. El login debe realizarse con el mismo usuario, endpoint, redirect y ruta de almacenamiento que el despliegue.
 
 ## Configuración de GitHub
 
@@ -37,7 +61,7 @@ Subir los cambios al repositorio. Los pull requests y pushes a `main` ejecutan l
 
 Se empaqueta el código del commit seleccionado, se transfiere por SSH y se ejecuta `npm ci`, los tests y una comprobación real de conexión/listado (máximo 90 segundos). Solo entonces se cambia atómicamente `~/whitebird-wowaudit-mcp/current`. Si falla antes, la versión activa se conserva. La configuración permanece en `~/whitebird/shared/agent.env` y no se incluye en los paquetes.
 
-El token necesita permiso para listar herramientas. El chequeo no ejecuta consultas de roster ni certifica los puntos pendientes de `REVISION-MCP.md`. Las salidas del servidor se ocultan en Actions; si falla, diagnosticar en una sesión privada de la VM.
+La autorización OAuth necesita permiso para listar herramientas. El chequeo no ejecuta consultas de roster ni certifica los puntos pendientes de `REVISION-MCP.md`. Las salidas del servidor se ocultan en Actions; si falla, diagnosticar en una sesión privada de la VM.
 
 Uso después del despliegue:
 
@@ -59,3 +83,5 @@ mv -Tf .rollback current
 Esto cambia la versión usada en futuras ejecuciones; no reinicia procesos consumidores que ya estuvieran en marcha.
 
 Referencias: [GitHub environments](https://docs.github.com/en/actions/concepts/workflows-and-actions/deployment-environments), [setup-node](https://github.com/actions/setup-node).
+
+Referencia OAuth: [guía oficial del SDK](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/clients/oauth.md).

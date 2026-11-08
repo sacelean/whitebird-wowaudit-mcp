@@ -1,4 +1,5 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { FileOAuthProvider } from './oauth.js';
 
 // Intentionally read-only. Write actions require a separately reviewed implementation.
 export const READ_TOOLS = Object.freeze([
@@ -20,11 +21,11 @@ export function validateEndpoint(endpoint) {
 
 export class WhitebirdMcpClient {
   constructor({ endpoint = process.env.WOWAUDIT_MCP_URL,
-                token = process.env.WOWAUDIT_MCP_TOKEN,
+                authProvider,
                 team = process.env.WOWAUDIT_TEAM_ID || '66082',
                 factory } = {}) {
     this.url = validateEndpoint(endpoint);
-    this.token = token;
+    this.authProvider = authProvider;
     this.team = String(team);
     this.factory = factory;
     this.client = null;
@@ -33,18 +34,17 @@ export class WhitebirdMcpClient {
 
   async connect() {
     if (this.client) return this;
-    if (!this.token && !this.factory) {
-      throw new Error('WOWAUDIT_MCP_TOKEN missing. Configure a supported authentication method before connecting. OAuth is not implemented in this prototype.');
-    }
     const client = this.factory ? await this.factory() : new Client(
       { name: 'whitebird-wowaudit-mcp', version: '0.1.0' },
       { versionNegotiation: { mode: 'auto' } }
     );
     try {
       if (!this.factory) {
-        const transport = new StreamableHTTPClientTransport(this.url, {
-          requestInit: { headers: { Authorization: `Bearer ${this.token}` } }
-        });
+        const provider = this.authProvider ?? new FileOAuthProvider({ endpoint: this.url });
+        if (!this.authProvider && !provider.tokens()) {
+          throw new Error('OAuth login required. Run src/login.js with the shared environment loaded before deploying.');
+        }
+        const transport = new StreamableHTTPClientTransport(this.url, { authProvider: provider });
         await client.connect(transport);
       }
       const result = await client.listTools();

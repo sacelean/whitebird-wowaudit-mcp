@@ -21,7 +21,7 @@ npm ci --ignore-scripts --no-audit --no-fund
 npm test
 # Do not emit tool metadata, credentials or server errors to Actions logs.
 if ! timeout 90s node --env-file="$env_file" src/cli.js >/dev/null 2>&1; then
-  echo 'MCP connection check failed; current release was not changed. Check endpoint and credentials on the VM.' >&2
+  echo 'MCP connection check failed; current release was not changed. Check endpoint and OAuth session on the VM; run src/login.js if authorization is required.' >&2
   exit 1
 fi
 if [[ -e "$base/current" && ! -L "$base/current" ]]; then

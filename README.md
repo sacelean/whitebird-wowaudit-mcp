@@ -17,9 +17,13 @@ await client.close();
 
 `npm test` validates the client safety layer without contacting WoWAudit.
 
-## Important authentication limitation
+## OAuth authentication
 
-The official WoWAudit MCP setup page could not be programmatically fetched in this environment. This prototype supports **bearer token only**; **OAuth login / refresh is NOT yet implemented**. A ChatGPT connection does not transfer its OAuth tokens to this service. Do not attempt to use ChatGPT credentials or scrape browser cookies. Verify authentication and use the official endpoint before production.
+The client uses OAuth authorization code with PKCE through the MCP SDK, including discovery and refresh-token renewal. Run the initial browser authorization on the VM using the steps in [the deployment guide](docs/DEPLOY-ORACLE.md#login-oauth-inicial). `WOWAUDIT_MCP_TOKEN` is no longer used.
+
+OAuth credentials are stored separately from `agent.env`, by default in `~/whitebird/shared/wowaudit-oauth.json`, owned by the deployment user with mode 0600. This file contains secrets in plaintext: protect VM access and backups. Do not commit or print it. Run only one process using this token store at a time to avoid concurrent refresh-token rotation. A ChatGPT connection does not transfer its OAuth session to this client.
+
+The official WoWAudit setup page was not accessible during implementation. Confirm the official MCP endpoint and OAuth registration/redirect requirements before the first login. The automated OAuth tests use a simulated authorization server; live WoWAudit integration remains pending.
 
 ## Safety
 
