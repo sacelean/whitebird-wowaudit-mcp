@@ -8,14 +8,15 @@ Usar Linux (Oracle Linux o Ubuntu, x86_64 o ARM64) con Bash, GNU tar/coreutils (
 
 Crear un usuario de despliegue sin sudo y autorizar una clave SSH dedicada. Permitir SSH en la Security List/NSG de Oracle y en el firewall del sistema desde el runner. Si la VM solo tiene IP privada, usar un runner con acceso a esa red y adaptar `runs-on`; el workflow actual usa runners públicos de GitHub.
 
-Como usuario de despliegue:
+Se reutiliza el archivo existente `~/whitebird/shared/agent.env`; no se duplica ni se modifica durante el despliegue. `~` corresponde al home del usuario SSH (`ORACLE_USER`). Si el agente usa otro usuario, será necesario ajustar la ruta en `deploy/install-release.sh` y conceder acceso de lectura al usuario de despliegue.
+
+Comprobar como usuario de despliegue, sin mostrar los secretos:
 
 ```bash
-install -m 700 -d "$HOME/whitebird-wowaudit-mcp/shared"
-install -m 600 /dev/null "$HOME/whitebird-wowaudit-mcp/shared/client.env"
+test -f "$HOME/whitebird/shared/agent.env" && test -r "$HOME/whitebird/shared/agent.env"
 ```
 
-Rellenar ese archivo en la VM con `WOWAUDIT_MCP_URL`, `WOWAUDIT_MCP_TOKEN` y `WOWAUDIT_TEAM_ID=66082`, usando `.env.example` como referencia. Usar el endpoint y un token aceptados oficialmente por WoWAudit. OAuth todavía no está implementado. No ejecutar de nuevo `install /dev/null` sobre un archivo ya configurado: lo vaciaría.
+El archivo debe contener `WOWAUDIT_MCP_URL`, `WOWAUDIT_MCP_TOKEN` y `WOWAUDIT_TEAM_ID=66082`, usando `.env.example` como referencia. Las demás variables del agente también se cargan en el proceso Node. Usar el endpoint y un token aceptados oficialmente por WoWAudit. OAuth todavía no está implementado.
 
 ## Configuración de GitHub
 
@@ -34,7 +35,7 @@ Variable opcional del environment: `ORACLE_SSH_PORT` (22 por defecto). Para un p
 
 Subir los cambios al repositorio. Los pull requests y pushes a `main` ejecutan las pruebas. En Actions, seleccionar **Validate and deploy to Oracle VM → Run workflow → main** para desplegar manualmente.
 
-Se empaqueta el código del commit seleccionado, se transfiere por SSH y se ejecuta `npm ci`, los tests y una comprobación real de conexión/listado (máximo 90 segundos). Solo entonces se cambia atómicamente `~/whitebird-wowaudit-mcp/current`. Si falla antes, la versión activa se conserva. Los archivos de configuración permanecen en `shared` y no se incluyen en los paquetes.
+Se empaqueta el código del commit seleccionado, se transfiere por SSH y se ejecuta `npm ci`, los tests y una comprobación real de conexión/listado (máximo 90 segundos). Solo entonces se cambia atómicamente `~/whitebird-wowaudit-mcp/current`. Si falla antes, la versión activa se conserva. La configuración permanece en `~/whitebird/shared/agent.env` y no se incluye en los paquetes.
 
 El token necesita permiso para listar herramientas. El chequeo no ejecuta consultas de roster ni certifica los puntos pendientes de `REVISION-MCP.md`. Las salidas del servidor se ocultan en Actions; si falla, diagnosticar en una sesión privada de la VM.
 
@@ -42,7 +43,7 @@ Uso después del despliegue:
 
 ```bash
 cd "$HOME/whitebird-wowaudit-mcp/current"
-node --env-file="$HOME/whitebird-wowaudit-mcp/shared/client.env" src/cli.js
+node --env-file="$HOME/whitebird/shared/agent.env" src/cli.js
 ```
 
 ## Volver a una versión anterior

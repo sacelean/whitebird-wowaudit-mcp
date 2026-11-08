@@ -6,7 +6,11 @@ release_id=${1:?Missing release ID}
 base="$HOME/whitebird-wowaudit-mcp"
 release="$base/releases/$release_id"
 archive="$base/incoming/$release_id.tgz"
-test -f "$base/shared/client.env"
+env_file="$HOME/whitebird/shared/agent.env"
+if [[ ! -f "$env_file" || ! -r "$env_file" ]]; then
+  echo 'Shared configuration ~/whitebird/shared/agent.env is missing or unreadable by the deployment user.' >&2
+  exit 1
+fi
 node -e 'if (Number(process.versions.node.split(".")[0]) < 22) process.exit(1)'
 mkdir -p "$base/releases"
 mkdir "$release"
@@ -16,7 +20,7 @@ cd "$release"
 npm ci --ignore-scripts --no-audit --no-fund
 npm test
 # Do not emit tool metadata, credentials or server errors to Actions logs.
-if ! timeout 90s node --env-file="$base/shared/client.env" src/cli.js >/dev/null 2>&1; then
+if ! timeout 90s node --env-file="$env_file" src/cli.js >/dev/null 2>&1; then
   echo 'MCP connection check failed; current release was not changed. Check endpoint and credentials on the VM.' >&2
   exit 1
 fi
