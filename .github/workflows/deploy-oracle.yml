@@ -1,0 +1,71 @@
+name: Validate and deploy to Oracle VM
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: bash -n deploy/install-release.sh
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: oracle-production
+    concurrency:
+      group: oracle-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ORACLE_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY"
+          test -n "$KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Upload and activate release
+        env:
+          VM_HOST: ${{ secrets.ORACLE_HOST }}
+          VM_USER: ${{ secrets.ORACLE_USER }}
+          VM_PORT: ${{ vars.ORACLE_SSH_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          [[ "$VM_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$VM_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
+          [[ "$VM_PORT" =~ ^[0-9]+$ ]]
+          release_id="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          ssh_opts=(-i ~/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15)
+          tar -czf /tmp/client.tgz package.json package-lock.json src test README.md docs deploy .env.example
+          ssh "${ssh_opts[@]}" -p "$VM_PORT" "$VM_USER@$VM_HOST" 'umask 077; mkdir -p "$HOME/whitebird-wowaudit-mcp/incoming"'
+          scp "${ssh_opts[@]}" -P "$VM_PORT" /tmp/client.tgz "$VM_USER@$VM_HOST:whitebird-wowaudit-mcp/incoming/$release_id.tgz"
+          ssh "${ssh_opts[@]}" -p "$VM_PORT" "$VM_USER@$VM_HOST" "bash -s -- '$release_id'" < deploy/install-release.sh
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts

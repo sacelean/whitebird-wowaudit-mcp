@@ -23,4 +23,11 @@ The official WoWAudit MCP setup page could not be programmatically fetched in th
 
 ## Safety
 
-The library enforces HTTPS and a *read-only* allowlist, scopes tools with a `team` parameter to Whitebird ID 66082, and refuses cross-team queries. It does not expose a server port. Give this process least-privilege credentials. Keep logs free of secrets and sensitive roster data.
+The library enforces HTTPS and a *read-only* allowlist, scopes tools with a `team` parameter to Whitebird ID 66082, and rejects explicit cross-team `team` arguments. Resource IDs without a `team` input still require ownership checks; see the review checklist. It does not expose a server port. Give this process least-privilege credentials. Keep logs free of secrets and sensitive roster data.
+
+## Revisión y despliegue
+
+- [Puntos pendientes de revisión](docs/REVISION-MCP.md)
+- [Pipeline y configuración de la VM Oracle](docs/DEPLOY-ORACLE.md)
+
+La pipeline ejecuta pruebas en PR/push a `main` y permite desplegar manualmente desde `main` al environment `oracle-production`.
